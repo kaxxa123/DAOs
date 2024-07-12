@@ -17,8 +17,7 @@ npx hardhat test  ./test/end-to-end.ts
 1. Deploy DAO contracts and start node interface...
 
     ```BASH
-    npx hardhat ignition deploy ./ignition/modules/MyGovernor.ts  --network localhost
-    npx hardhat ignition deploy ./ignition/modules/USDToken.ts    --network localhost
+    npx hardhat ignition deploy ./ignition/modules/deploy.ts  --network localhost
 
     npx hardhat console --network localhost
     ```
@@ -33,8 +32,8 @@ npx hardhat test  ./test/end-to-end.ts
     const USDFactory = await ethers.getContractFactory("USDToken")
 
     let vote = await VoteFactory.attach("0x5FbDB2315678afecb367f032d93F642f64180aa3")
-    let gov = await GovFactory.attach("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512")
-    let usd = await USDFactory.attach("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")
+    let gov = await GovFactory.attach("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")
+    let usd = await USDFactory.attach("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512")
     ```
 
 1. Distribute voting tokens and assign voting power.
