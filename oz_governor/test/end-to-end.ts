@@ -45,7 +45,9 @@ describe("End-to-End Governor Test", function () {
         const accounts = await hre.ethers.getSigners()
 
         for (let cnt = 0; cnt < totalVoters; cnt++) {
-            await vote.mint(accounts[cnt], amountVote);
+            await expect(
+                vote.mint(accounts[cnt], amountVote)
+            ).to.changeTokenBalances(vote, [accounts[cnt]], [amountVote]);
         }
 
         expect(await vote.totalSupply()).to.equal(totalVoters * amountVote);
@@ -118,6 +120,10 @@ describe("End-to-End Governor Test", function () {
         await gov.connect(accounts[4]).castVote(proposalId, 1)
         await gov.connect(accounts[5]).castVote(proposalId, 1)
 
+        await expect(
+            gov.connect(accounts[3]).castVote(proposalId, 3)
+        ).to.be.revertedWithCustomError(gov, "GovernorInvalidVoteType");
+
         expect(await gov.hasVoted(proposalId, accounts[2].address)).to.true
         expect(await gov.hasVoted(proposalId, accounts[3].address)).to.false
 
@@ -148,12 +154,14 @@ describe("End-to-End Governor Test", function () {
         expect(await gov.proposalNeedsQueuing(proposalId)).to.false
         expect(await usd.balanceOf(winnerAddress)).to.equal(0)
 
-        await gov.execute(
-            [usd],
-            [0],
-            [transferCalldata],
-            proposalHash
-        )
+        await expect(
+            gov.execute(
+                [usd],
+                [0],
+                [transferCalldata],
+                proposalHash
+            )
+        ).to.emit(gov, "ProposalExecuted").withArgs(proposalId);
 
         expect(await usd.balanceOf(winnerAddress)).to.equal(grantAmount)
     });
