@@ -1,9 +1,16 @@
-# OpemZeppelin DAO Test
+# OpenZeppelin v5 Basic Governor DAO
+
+Step-by-step test of the simplest Governor DAO, without a timelock.
+
+To quicly run an end-to-end test of all the steps:
+```BASH
+npx hardhat test  ./test/end-to-end.ts
+```
 
 1. Start test node on localhost
 
     ```BASH
-    REPORT_GAS=true npx hardhat test
+    # REPORT_GAS=true npx hardhat test
     npx hardhat node
     ```
 
@@ -67,9 +74,9 @@
 
     await usd.mint(govAddr, 100n*10n**18n)
 
-    const teamAddress = accounts[9].address
+    const winnerAddress = accounts[9].address
     const grantAmount = 3n*10n**18n
-    const transferCalldata = usd.interface.encodeFunctionData('transfer', [teamAddress, grantAmount])
+    const transferCalldata = usd.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
     const proposalText = "Proposal #1: Give grant to team"
 
     await gov.propose(
@@ -80,14 +87,14 @@
     )
 
     // Get voting proposal id
-    bytesDesc = ethers.toUtf8Bytes("Proposal #1: Give grant to team")
-    hashDesc = ethers.keccak256(bytesDesc)
+    bytesDesc = ethers.toUtf8Bytes(proposalText)
+    proposalHash = ethers.keccak256(bytesDesc)
 
-    propId = await gov.hashProposal(
+    proposalId = await gov.hashProposal(
         [usdAddr],
         [0],
         [transferCalldata],
-        hashDesc
+        proposalHash
     )
     ```
 
@@ -95,38 +102,38 @@
 
     ```JS
     // Query info about proposal
-    await gov.proposalProposer(propId)
+    await gov.proposalProposer(proposalId)
 
     // Get ProposalState from Pending (0), Active, Canceled, Defeated, Succeeded ...
-    await gov.state(propId)
+    await gov.state(proposalId)
 
     // Voting start block
     await ethers.provider.getBlockNumber()
-    await gov.proposalSnapshot(propId)
+    await gov.proposalSnapshot(proposalId)
 
     // Voting end block
-    await gov.proposalDeadline(propId)
+    await gov.proposalDeadline(proposalId)
     ```
 
-1. Vote,  choosing one option from GovernorCountingSimple::VoteType
+1. Vote, choosing one option from GovernorCountingSimple::VoteType
 
     ```JS
     // Against(0), For(1), Abstain(2)
-    await gov.connect(accounts[0]).castVote(propId, 0)
-    await gov.connect(accounts[1]).castVote(propId, 1)
-    await gov.connect(accounts[2]).castVote(propId, 2)
-    await gov.connect(accounts[4]).castVote(propId, 1)
-    await gov.connect(accounts[5]).castVote(propId, 1)
+    await gov.connect(accounts[0]).castVote(proposalId, 0)
+    await gov.connect(accounts[1]).castVote(proposalId, 1)
+    await gov.connect(accounts[2]).castVote(proposalId, 2)
+    await gov.connect(accounts[4]).castVote(proposalId, 1)
+    await gov.connect(accounts[5]).castVote(proposalId, 1)
 
     // We only have 3 options - Invalid Vote Type
-    await gov.connect(accounts[3]).castVote(propId, 3)
+    await gov.connect(accounts[3]).castVote(proposalId, 3)
 
     // Check who voted
-    await gov.hasVoted(propId, accounts[2].address)
-    await gov.hasVoted(propId, accounts[3].address)
+    await gov.hasVoted(proposalId, accounts[2].address)
+    await gov.hasVoted(proposalId, accounts[3].address)
 
     // Get voting result
-    await gov.proposalVotes(propId)
+    await gov.proposalVotes(proposalId)
 
     // Minimum number of votes for a proposal to be successful.
     blk = await ethers.provider.getBlockNumber()
@@ -138,23 +145,23 @@
     ```JS
     // Voting end block
     await ethers.provider.getBlockNumber()
-    await gov.proposalDeadline(propId)
+    await gov.proposalDeadline(proposalId)
 
     // Get ProposalState from Pending (0), Active, Canceled, Defeated, Succeeded ...
-    await gov.state(propId)
+    await gov.state(proposalId)
 
     // Get voting result
-    await gov.proposalVotes(propId)
+    await gov.proposalVotes(proposalId)
 
     // Does proposal need queuing to execute?
-    await gov.proposalNeedsQueuing(propId)
+    await gov.proposalNeedsQueuing(proposalId)
 
     // If queuing required...
     await gov.queue(
         [usdAddr],
         [0],
         [transferCalldata],
-        hashDesc
+        proposalHash
     )
 
     // Execute proposal without queuing
@@ -162,10 +169,10 @@
         [usdAddr],
         [0],
         [transferCalldata],
-        hashDesc
+        proposalHash
     )
 
     // Check if execution was correct.
     await usd.balanceOf(govAddr)
-    await usd.balanceOf(accounts[9].address)
+    await usd.balanceOf(winnerAddress)
     ```
