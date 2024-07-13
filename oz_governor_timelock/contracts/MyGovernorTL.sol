@@ -22,7 +22,11 @@ contract MyGovernorTL is
         TimelockController _timelock
     )
         Governor("MyGovernorTL")
-        GovernorSettings(7200 /* 1 day */, 50400 /* 1 week */, 5e18)
+        GovernorSettings(
+            300, // voting delay,   5min =  5*60 (for a 1s/block config)
+            600, // voting period, 10min = 10*60 (for a 1s/block config)
+            5e18 // proposal threshold
+        )
         GovernorVotes(_token)
         GovernorVotesQuorumFraction(4)
         GovernorTimelockControl(_timelock)

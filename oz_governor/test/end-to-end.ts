@@ -23,7 +23,6 @@ describe("End-to-End Governor Test", function () {
     let winnerAddress: string
     let transferCalldata: string;
 
-
     it("Should deploy contracts", async function () {
         const [account0] = await hre.ethers.getSigners()
 
@@ -124,8 +123,8 @@ describe("End-to-End Governor Test", function () {
             gov.connect(accounts[3]).castVote(proposalId, 3)
         ).to.be.revertedWithCustomError(gov, "GovernorInvalidVoteType");
 
-        expect(await gov.hasVoted(proposalId, accounts[2].address)).to.true
-        expect(await gov.hasVoted(proposalId, accounts[3].address)).to.false
+        expect(await gov.hasVoted(proposalId, accounts[2])).to.true
+        expect(await gov.hasVoted(proposalId, accounts[3])).to.false
 
         let [no, yes, abstain] = await gov.proposalVotes(proposalId)
 

@@ -146,8 +146,8 @@ describe("End-to-End Governor Test", function () {
             gov.connect(accounts[3]).castVote(proposalId, 3)
         ).to.be.revertedWithCustomError(gov, "GovernorInvalidVoteType");
 
-        expect(await gov.hasVoted(proposalId, accounts[2].address)).to.true
-        expect(await gov.hasVoted(proposalId, accounts[3].address)).to.false
+        expect(await gov.hasVoted(proposalId, accounts[2])).to.true
+        expect(await gov.hasVoted(proposalId, accounts[3])).to.false
 
         let [no, yes, abstain] = await gov.proposalVotes(proposalId)
 
@@ -183,8 +183,17 @@ describe("End-to-End Governor Test", function () {
             proposalHash
         )
 
-        // advance time by 5 minutes and mine a new block
-        await time.increase(5 * 60);
+        // Determine queuing time length
+        let now = await time.latest()
+        let eta = await gov.proposalEta(proposalId)
+        expect(eta).to.be.greaterThan(now)
+
+        // advance time to exceed ETA
+        await time.increaseTo(eta + 1n);
+        mine()
+
+        now = await time.latest()
+        expect(eta).to.be.lessThan(now)
 
         await expect(
             gov.execute(

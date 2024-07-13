@@ -4,13 +4,12 @@ Step-by-step test of the simplest Governor DAO, without a timelock.
 
 To quicly run an end-to-end test of all the steps:
 ```BASH
-npx hardhat test  ./test/end-to-end.ts
+REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 ```
 
 1. Start test node on localhost
 
     ```BASH
-    # REPORT_GAS=true npx hardhat test
     npx hardhat node
     ```
 
@@ -40,26 +39,26 @@ npx hardhat test  ./test/end-to-end.ts
 
     ```JS
     // Distribute voting tokens
-    await vote.mint(accounts[0].address, 5n*10n**18n)
-    await vote.mint(accounts[1].address, 5n*10n**18n)
-    await vote.mint(accounts[2].address, 5n*10n**18n)
-    await vote.mint(accounts[3].address, 5n*10n**18n)
-    await vote.mint(accounts[4].address, 5n*10n**18n)
-    await vote.mint(accounts[5].address, 5n*10n**18n)
+    await vote.mint(accounts[0], 5n*10n**18n)
+    await vote.mint(accounts[1], 5n*10n**18n)
+    await vote.mint(accounts[2], 5n*10n**18n)
+    await vote.mint(accounts[3], 5n*10n**18n)
+    await vote.mint(accounts[4], 5n*10n**18n)
+    await vote.mint(accounts[5], 5n*10n**18n)
 
     // Delegate voting power to oneself
-    await vote.connect(accounts[0]).delegate(accounts[0].address)
-    await vote.connect(accounts[1]).delegate(accounts[1].address)
-    await vote.connect(accounts[2]).delegate(accounts[2].address)
-    await vote.connect(accounts[3]).delegate(accounts[3].address)
-    await vote.connect(accounts[4]).delegate(accounts[4].address)
-    await vote.connect(accounts[5]).delegate(accounts[5].address)
+    await vote.connect(accounts[0]).delegate(accounts[0])
+    await vote.connect(accounts[1]).delegate(accounts[1])
+    await vote.connect(accounts[2]).delegate(accounts[2])
+    await vote.connect(accounts[3]).delegate(accounts[3])
+    await vote.connect(accounts[4]).delegate(accounts[4])
+    await vote.connect(accounts[5]).delegate(accounts[5])
 
     // Voting power of an account at a specific timepoint
-    await gov.getVotes(accounts[1].address, 0)
+    await gov.getVotes(accounts[1], 0)
 
     blk = await ethers.provider.getBlockNumber()
-    await gov.getVotes(accounts[1].address, blk)
+    await gov.getVotes(accounts[1], blk)
     ```
 
 1. Submit voting proposal
@@ -67,11 +66,7 @@ npx hardhat test  ./test/end-to-end.ts
     ```JS
     // The number of votes required for a voter to become a proposer.
     await gov.proposalThreshold()
-
-    const usdAddr = await usd.getAddress()
-    const govAddr = await gov.getAddress()
-
-    await usd.mint(govAddr, 100n*10n**18n)
+    await usd.mint(gov, 100n*10n**18n)
 
     const winnerAddress = accounts[9].address
     const grantAmount = 3n*10n**18n
@@ -79,7 +74,7 @@ npx hardhat test  ./test/end-to-end.ts
     const proposalText = "Proposal #1: Give grant to team"
 
     await gov.propose(
-        [usdAddr],
+        [usd],
         [0],
         [transferCalldata],
         proposalText
@@ -90,7 +85,7 @@ npx hardhat test  ./test/end-to-end.ts
     proposalHash = ethers.keccak256(bytesDesc)
 
     proposalId = await gov.hashProposal(
-        [usdAddr],
+        [usd],
         [0],
         [transferCalldata],
         proposalHash
@@ -128,8 +123,8 @@ npx hardhat test  ./test/end-to-end.ts
     await gov.connect(accounts[3]).castVote(proposalId, 3)
 
     // Check who voted
-    await gov.hasVoted(proposalId, accounts[2].address)
-    await gov.hasVoted(proposalId, accounts[3].address)
+    await gov.hasVoted(proposalId, accounts[2])
+    await gov.hasVoted(proposalId, accounts[3])
 
     // Get voting result
     await gov.proposalVotes(proposalId)
@@ -157,7 +152,7 @@ npx hardhat test  ./test/end-to-end.ts
 
     // If queuing required...
     await gov.queue(
-        [usdAddr],
+        [usd],
         [0],
         [transferCalldata],
         proposalHash
@@ -165,13 +160,13 @@ npx hardhat test  ./test/end-to-end.ts
 
     // Execute proposal without queuing
     await gov.execute(
-        [usdAddr],
+        [usd],
         [0],
         [transferCalldata],
         proposalHash
     )
 
     // Check if execution was correct.
-    await usd.balanceOf(govAddr)
+    await usd.balanceOf(gov)
     await usd.balanceOf(winnerAddress)
     ```
