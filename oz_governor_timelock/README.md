@@ -2,10 +2,31 @@
 
 Step-by-step test of a Governor DAO, with a timelock.
 
-To quicly run an end-to-end test of all the steps:
+To quickly run an end-to-end test of all the steps:
 ```BASH
 REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 ```
+
+1. Project is also configured for installation on Avalanche Fuji.
+    Ensure all hardhat environment variables are configured:
+
+    ```BASH
+    # Already configured variables
+    npx hardhat vars list
+
+    # Project variables needed
+    npx hardhat vars setup
+
+    # Set missing variables
+    npx hardhat vars set SECRET_KEY_0
+    npx hardhat vars set SECRET_KEY_1
+    npx hardhat vars set SECRET_KEY_2
+    npx hardhat vars set SECRET_KEY_3
+    npx hardhat vars set SECRET_KEY_4
+    npx hardhat vars set SECRET_KEY_5
+    ```
+
+    See Avalanche fuji deployment contract addresses [here](./ignition/deployments/chain-43113/deployed_addresses.json).
 
 1. Start test node on localhost
 
@@ -31,10 +52,19 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     const USDFactory = await ethers.getContractFactory("USDToken")
     const GovFactory = await ethers.getContractFactory("MyGovernorTL")
 
-    let lock = await LockFactory.attach("0x5FbDB2315678afecb367f032d93F642f64180aa3")
-    let vote = await VoteFactory.attach("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512")
-    let usd = await USDFactory.attach("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")
-    let gov = await GovFactory.attach("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
+    // Pick the correct chain
+    const chain_node = "chain-31337"
+    const chain_fuji = "chain-43113"
+    const chain_type = chain_node
+
+    fs = require("fs")
+    fs.readFile(`./ignition/deployments/${chain_type}/deployed_addresses.json`, 'utf8',
+                        (err, data) => contract_addrs = JSON.parse(data.split('#').join('_')))
+
+    let lock = await LockFactory.attach(contract_addrs.MyTimeLockModule_MyTimeLock)
+    let vote = await VoteFactory.attach(contract_addrs.MyVoteTokenModule_MyVoteToken)
+    let usd = await USDFactory.attach(contract_addrs.USDTokenModule_USDToken)
+    let gov = await GovFactory.attach(contract_addrs.MyGovernorTLModule_MyGovernorTL)
     ```
 
 1. Distribute voting tokens and assign voting power.
@@ -60,7 +90,7 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     await gov.getVotes(accounts[1].address, 0)
 
     blk = await ethers.provider.getBlockNumber()
-    await gov.getVotes(accounts[1].address, blk)
+    await gov.getVotes(accounts[1].address, blk-1)
     ```
 
 1. Submit voting proposal
@@ -71,7 +101,7 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     await usd.mint(lock, 100n*10n**18n)
 
-    const winnerAddress = accounts[9].address
+    const winnerAddress = accounts[5].address
     const grantAmount = 3n*10n**18n
     const transferCalldata = usd.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
     const proposalText = "Proposal #1: Give grant to team"
@@ -105,6 +135,8 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     await gov.state(proposalId)
 
     // Voting start block
+    // Local: 300 blocks ~  5min
+    // Fuji:  300 blocks ~ 22min
     await ethers.provider.getBlockNumber()
     await gov.proposalSnapshot(proposalId)
 
@@ -134,13 +166,15 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     // Minimum number of votes for a proposal to be successful.
     blk = await ethers.provider.getBlockNumber()
-    await gov.quorum(blk)
+    await gov.quorum(blk-1)
     ```
 
 1. Execute proposal
 
     ```JS
     // Voting end block
+    // Local: 600 blocks ~ 10min
+    // Fuji:  600 blocks ~ 45min
     await ethers.provider.getBlockNumber()
     await gov.proposalDeadline(proposalId)
 
@@ -167,7 +201,7 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     // Get last block timestamp
     blk = await ethers.provider.getBlockNumber()
-    (await ethers.provider.getBlock(blk)).timestamp
+    (await ethers.provider.getBlock(blk-1)).timestamp
 
     // Execute proposal after ETA exceeded...
     await gov.execute(
