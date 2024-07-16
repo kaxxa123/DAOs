@@ -58,8 +58,10 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     const chain_type = chain_node
 
     fs = require("fs")
-    fs.readFile(`./ignition/deployments/${chain_type}/deployed_addresses.json`, 'utf8',
-                        (err, data) => contract_addrs = JSON.parse(data.split('#').join('_')))
+    util = require('util')
+    readFile = util.promisify(fs.readFile)
+    contract_data = await readFile(`./ignition/deployments/${chain_type}/deployed_addresses.json`, 'utf8')
+    contract_addrs = JSON.parse(contract_data.split('#').join('_'))
 
     let lock = await LockFactory.attach(contract_addrs.MyTimeLockModule_MyTimeLock)
     let vote = await VoteFactory.attach(contract_addrs.MyVoteTokenModule_MyVoteToken)
@@ -71,43 +73,52 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     ```JS
     // Distribute voting tokens
-    await vote.mint(accounts[0].address, 5n*10n**18n)
-    await vote.mint(accounts[1].address, 5n*10n**18n)
-    await vote.mint(accounts[2].address, 5n*10n**18n)
-    await vote.mint(accounts[3].address, 5n*10n**18n)
-    await vote.mint(accounts[4].address, 5n*10n**18n)
-    await vote.mint(accounts[5].address, 5n*10n**18n)
+    await vote.mint(accounts[0], 5n*10n**18n)
+    await vote.mint(accounts[1], 5n*10n**18n)
+    await vote.mint(accounts[2], 5n*10n**18n)
+    await vote.mint(accounts[3], 5n*10n**18n)
+    await vote.mint(accounts[4], 5n*10n**18n)
+    await vote.mint(accounts[5], 5n*10n**18n)
 
     // Delegate voting power to oneself
-    await vote.connect(accounts[0]).delegate(accounts[0].address)
-    await vote.connect(accounts[1]).delegate(accounts[1].address)
-    await vote.connect(accounts[2]).delegate(accounts[2].address)
-    await vote.connect(accounts[3]).delegate(accounts[3].address)
-    await vote.connect(accounts[4]).delegate(accounts[4].address)
-    await vote.connect(accounts[5]).delegate(accounts[5].address)
+    await vote.connect(accounts[0]).delegate(accounts[0])
+    await vote.connect(accounts[1]).delegate(accounts[1])
+    await vote.connect(accounts[2]).delegate(accounts[2])
+    await vote.connect(accounts[3]).delegate(accounts[3])
+    await vote.connect(accounts[4]).delegate(accounts[4])
+    await vote.connect(accounts[5]).delegate(accounts[5])
 
     // Voting power of an account at a specific timepoint
-    await gov.getVotes(accounts[1].address, 0)
+    await gov.getVotes(accounts[1], 0)
 
     blk = await ethers.provider.getBlockNumber()
-    await gov.getVotes(accounts[1].address, blk-1)
+    await gov.getVotes(accounts[1], blk-1)
     ```
 
-1. Submit voting proposal
+1. Surrender vote token ownership to the Timelock contract.
+
+    ```BASH
+    await vote.transferOwnership(lock)
+    await vote.owner()
+    ```
+
+1. Submit proposal
+
+    __Example 1: Transferring our fake USD Token__
 
     ```JS
     // The number of votes required for a voter to become a proposer.
     await gov.proposalThreshold()
-
     await usd.mint(lock, 100n*10n**18n)
 
     const winnerAddress = accounts[5].address
     const grantAmount = 3n*10n**18n
-    const transferCalldata = usd.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
-    const proposalText = "Proposal #1: Give grant to team"
+    const targetContract = usd;
+    const transferCalldata = targetContract.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
+    const proposalText = "Proposal #1: Give USD grant to team"
 
     await gov.propose(
-        [usd],
+        [targetContract],
         [0],
         [transferCalldata],
         proposalText
@@ -118,7 +129,40 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     proposalHash = ethers.keccak256(bytesDesc)
 
     proposalId = await gov.hashProposal(
-        [usd],
+        [targetContract],
+        [0],
+        [transferCalldata],
+        proposalHash
+    )
+    ```
+
+    <BR />
+
+    __Example 2: Minting voting tokens__
+
+    ```JS
+    // The number of votes required for a voter to become a proposer.
+    await gov.proposalThreshold()
+
+    const winnerAddress = accounts[5].address
+    const voteAmount = 2n*10n**18n
+    const targetContract = vote;
+    const transferCalldata = targetContract.interface.encodeFunctionData('mint', [winnerAddress, voteAmount])
+    const proposalText = "Proposal #2: Mint votes for account 5"
+
+    await gov.propose(
+        [targetContract],
+        [0],
+        [transferCalldata],
+        proposalText
+    )
+
+    // Get voting proposal id
+    bytesDesc = ethers.toUtf8Bytes(proposalText)
+    proposalHash = ethers.keccak256(bytesDesc)
+
+    proposalId = await gov.hashProposal(
+        [targetContract],
         [0],
         [transferCalldata],
         proposalHash
@@ -158,8 +202,8 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     await gov.connect(accounts[3]).castVote(proposalId, 3)
 
     // Check who voted
-    await gov.hasVoted(proposalId, accounts[2].address)
-    await gov.hasVoted(proposalId, accounts[3].address)
+    await gov.hasVoted(proposalId, accounts[2])
+    await gov.hasVoted(proposalId, accounts[3])
 
     // Get voting result
     await gov.proposalVotes(proposalId)
@@ -189,7 +233,7 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     // If queuing required...
     await gov.queue(
-        [usd],
+        [targetContract],
         [0],
         [transferCalldata],
         proposalHash
@@ -205,13 +249,13 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     // Execute proposal after ETA exceeded...
     await gov.execute(
-        [usd],
+        [targetContract],
         [0],
         [transferCalldata],
         proposalHash
     )
 
     // Check if execution was correct.
-    await usd.balanceOf(lock)
-    await usd.balanceOf(winnerAddress)
+    await targetContract.balanceOf(lock)
+    await targetContract.balanceOf(winnerAddress)
     ```

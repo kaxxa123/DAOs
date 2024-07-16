@@ -30,9 +30,19 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     const GovFactory = await ethers.getContractFactory("MyGovernor")
     const USDFactory = await ethers.getContractFactory("USDToken")
 
-    let vote = await VoteFactory.attach("0x5FbDB2315678afecb367f032d93F642f64180aa3")
-    let gov = await GovFactory.attach("0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0")
-    let usd = await USDFactory.attach("0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512")
+    // Pick the correct chain
+    const chain_node = "chain-31337"
+    const chain_type = chain_node
+
+    fs = require("fs")
+    util = require('util')
+    readFile = util.promisify(fs.readFile)
+    contract_data = await readFile(`./ignition/deployments/${chain_type}/deployed_addresses.json`, 'utf8')
+    contract_addrs = JSON.parse(contract_data.split('#').join('_'))
+
+    let vote = await VoteFactory.attach(contract_addrs.MyVoteTokenModule_MyVoteToken)
+    let usd = await USDFactory.attach(contract_addrs.USDTokenModule_USDToken)
+    let gov = await GovFactory.attach(contract_addrs.MyGovernorModule_MyGovernor)
     ```
 
 1. Distribute voting tokens and assign voting power.
@@ -58,23 +68,33 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     await gov.getVotes(accounts[1], 0)
 
     blk = await ethers.provider.getBlockNumber()
-    await gov.getVotes(accounts[1], blk)
+    await gov.getVotes(accounts[1], blk-1)
     ```
 
-1. Submit voting proposal
+1. Surrender vote token ownership to the Governor contract.
+
+    ```BASH
+    await vote.transferOwnership(gov)
+    await vote.owner()
+    ```
+
+1. Submit proposal
+
+    __Example 1: Transferring our fake USD Token__
 
     ```JS
     // The number of votes required for a voter to become a proposer.
     await gov.proposalThreshold()
     await usd.mint(gov, 100n*10n**18n)
 
-    const winnerAddress = accounts[9].address
+    const winnerAddress = accounts[5].address
     const grantAmount = 3n*10n**18n
-    const transferCalldata = usd.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
-    const proposalText = "Proposal #1: Give grant to team"
+    const targetContract = usd;
+    const transferCalldata = targetContract.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
+    const proposalText = "Proposal #1: Give USD grant to team"
 
     await gov.propose(
-        [usd],
+        [targetContract],
         [0],
         [transferCalldata],
         proposalText
@@ -85,7 +105,40 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     proposalHash = ethers.keccak256(bytesDesc)
 
     proposalId = await gov.hashProposal(
-        [usd],
+        [targetContract],
+        [0],
+        [transferCalldata],
+        proposalHash
+    )
+    ```
+
+    <BR />
+
+    __Example 2: Minting voting tokens__
+
+    ```JS
+    // The number of votes required for a voter to become a proposer.
+    await gov.proposalThreshold()
+
+    const winnerAddress = accounts[5].address
+    const voteAmount = 2n*10n**18n
+    const targetContract = vote;
+    const transferCalldata = targetContract.interface.encodeFunctionData('mint', [winnerAddress, voteAmount])
+    const proposalText = "Proposal #2: Mint votes for account 5"
+
+    await gov.propose(
+        [targetContract],
+        [0],
+        [transferCalldata],
+        proposalText
+    )
+
+    // Get voting proposal id
+    bytesDesc = ethers.toUtf8Bytes(proposalText)
+    proposalHash = ethers.keccak256(bytesDesc)
+
+    proposalId = await gov.hashProposal(
+        [targetContract],
         [0],
         [transferCalldata],
         proposalHash
@@ -131,7 +184,7 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
 
     // Minimum number of votes for a proposal to be successful.
     blk = await ethers.provider.getBlockNumber()
-    await gov.quorum(blk)
+    await gov.quorum(blk-1)
     ```
 
 1. Execute proposal
@@ -147,26 +200,18 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     // Get voting result
     await gov.proposalVotes(proposalId)
 
-    // Does proposal need queuing to execute?
+    // Proposal shouldn't need queuing...
     await gov.proposalNeedsQueuing(proposalId)
-
-    // If queuing required...
-    await gov.queue(
-        [usd],
-        [0],
-        [transferCalldata],
-        proposalHash
-    )
 
     // Execute proposal without queuing
     await gov.execute(
-        [usd],
+        [targetContract],
         [0],
         [transferCalldata],
         proposalHash
     )
 
     // Check if execution was correct.
-    await usd.balanceOf(gov)
-    await usd.balanceOf(winnerAddress)
+    await targetContract.balanceOf(gov)
+    await targetContract.balanceOf(winnerAddress)
     ```

@@ -2,12 +2,11 @@ import { mine, time } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import hre from "hardhat";
-import { MyGovernorTL, MyTimeLock, MyVoteToken, USDToken } from "../typechain-types";
+import { MyGovernorTL, MyTimeLock, MyVoteToken } from "../typechain-types";
 
-describe("End-to-End Governor Test", function () {
+describe("Vote Allocation Proposal Test", function () {
 
     // Contrats
-    let usd: USDToken;
     let vote: MyVoteToken;
     let gov: MyGovernorTL;
     let lock: MyTimeLock;
@@ -18,98 +17,47 @@ describe("End-to-End Governor Test", function () {
 
     //Proposal
     const grantAmount: bigint = 3n * 10n ** 18n
-    const proposalText: string = "Proposal #1: Give grant to winner"
+    const proposalText: string = "Proposal #1: Allocate extra votes to winner"
     const proposalHash = hre.ethers.keccak256(hre.ethers.toUtf8Bytes(proposalText))
     let proposalId: bigint
     let winnerAddress: string
-    let targetContract: USDToken;
+    let targetContract: MyVoteToken;
     let transferCalldata: string;
 
+    it("Should setup test...", async function () {
+        const accounts = await hre.ethers.getSigners()
 
-    it("Should deploy contracts", async function () {
-        const [account0] = await hre.ethers.getSigners()
-
-        const USDFactory = await hre.ethers.getContractFactory("USDToken")
+        // Deploy contracts
         const VoteFactory = await hre.ethers.getContractFactory("MyVoteToken")
         const GovFactory = await hre.ethers.getContractFactory("MyGovernorTL")
         const LockFactory = await hre.ethers.getContractFactory("MyTimeLock")
-
-        lock = await LockFactory.deploy(5 * 60, [], ["0x0000000000000000000000000000000000000000"], account0);
-        usd = await USDFactory.deploy(account0);
-        vote = await VoteFactory.deploy(account0);
+        lock = await LockFactory.deploy(5 * 60, [], ["0x0000000000000000000000000000000000000000"], accounts[0]);
+        vote = await VoteFactory.deploy(accounts[0]);
         gov = await GovFactory.deploy(vote, lock);
 
-        let voteAddr = await vote.getAddress()
-        expect(await usd.symbol()).to.equal("UST")
-        expect(await vote.symbol()).to.equal("MVT")
-        expect(await gov.token()).to.equal(voteAddr)
-    });
-
-    it("Should set timelock roles", async function () {
-        const [account0] = await hre.ethers.getSigners()
+        // Set timelock roles
         const PROPOSER_ROLE = await lock.PROPOSER_ROLE()
         const CANCELLER_ROLE = await lock.CANCELLER_ROLE()
         const DEFAULT_ADMIN_ROLE = await lock.DEFAULT_ADMIN_ROLE()
-
-        expect(await lock.hasRole(PROPOSER_ROLE, gov)).to.be.false
-        expect(await lock.hasRole(CANCELLER_ROLE, gov)).to.be.false
-        expect(await lock.hasRole(DEFAULT_ADMIN_ROLE, account0)).to.be.true
-
         await lock.grantRole(PROPOSER_ROLE, gov)
         await lock.grantRole(CANCELLER_ROLE, gov)
-        await lock.revokeRole(DEFAULT_ADMIN_ROLE, account0);
+        await lock.revokeRole(DEFAULT_ADMIN_ROLE, accounts[0]);
 
-        expect(await lock.hasRole(PROPOSER_ROLE, gov)).to.be.true
-        expect(await lock.hasRole(CANCELLER_ROLE, gov)).to.be.true
-        expect(await lock.hasRole(DEFAULT_ADMIN_ROLE, account0)).to.be.false
-    });
-
-    it("Should distribute voting tokens", async function () {
-        const accounts = await hre.ethers.getSigners()
-
+        // Assign votes to founders...
         for (let cnt = 0; cnt < totalVoters; cnt++) {
-            await expect(
-                vote.mint(accounts[cnt], amountVote)
-            ).to.changeTokenBalances(vote, [accounts[cnt]], [amountVote]);
-        }
-
-        expect(await vote.totalSupply()).to.equal(totalVoters * amountVote);
-    });
-
-    it("Should handover vote token ownership to Governor", async function () {
-        const [account0] = await hre.ethers.getSigners()
-
-        expect(await vote.owner()).to.equal(account0)
-        await vote.connect(account0).transferOwnership(lock)
-
-        expect(await vote.owner()).to.equal(lock)
-    });
-
-    it("Should delegate voting power to oneself", async function () {
-        const accounts = await hre.ethers.getSigners()
-
-        for (let cnt = 0; cnt < totalVoters; cnt++) {
+            await vote.mint(accounts[cnt], amountVote)
             await vote.connect(accounts[cnt]).delegate(accounts[cnt])
         }
 
-        // Verify delegation
-        // let blk = await hre.ethers.provider.getBlockNumber()
-        let blk = await time.latestBlock();
-        await mine();
-
-        for (let cnt = 0; cnt < totalVoters; cnt++) {
-            let votePower = await gov.getVotes(accounts[1], blk)
-            expect(votePower).to.equal(amountVote)
-        }
+        // Hand over voting contract ownership to Governor
+        await vote.connect(accounts[0]).transferOwnership(lock)
     });
 
-    it("Should submit transfer proposal", async function () {
-        await usd.mint(lock, 100n * 10n ** 18n)
-
+    it("Should submit vote token allocation proposal", async function () {
         const [account0] = await hre.ethers.getSigners()
         winnerAddress = account0.address
-        targetContract = usd;
-        transferCalldata = targetContract.interface.encodeFunctionData('transfer', [winnerAddress, grantAmount])
+        targetContract = vote;
+        transferCalldata = targetContract.interface.encodeFunctionData('mint', [winnerAddress, grantAmount])
 
         await gov.propose(
             [targetContract],
@@ -185,7 +133,6 @@ describe("End-to-End Governor Test", function () {
 
     it("Should execute proposal", async function () {
         expect(await gov.proposalNeedsQueuing(proposalId)).to.true
-        expect(await targetContract.balanceOf(winnerAddress)).to.equal(0)
 
         await gov.queue(
             [targetContract],
@@ -193,7 +140,6 @@ describe("End-to-End Governor Test", function () {
             [transferCalldata],
             proposalHash
         )
-
         // Determine queuing time length
         let now = await time.latest()
         let eta = await gov.proposalEta(proposalId)
@@ -206,6 +152,8 @@ describe("End-to-End Governor Test", function () {
         now = await time.latest()
         expect(eta).to.be.lessThan(now)
 
+        let balanceStart = await targetContract.balanceOf(winnerAddress)
+
         await expect(
             gov.execute(
                 [targetContract],
@@ -215,6 +163,6 @@ describe("End-to-End Governor Test", function () {
             )
         ).to.emit(gov, "ProposalExecuted").withArgs(proposalId);
 
-        expect(await targetContract.balanceOf(winnerAddress)).to.equal(grantAmount)
+        expect(await targetContract.balanceOf(winnerAddress)).to.equal(balanceStart + grantAmount)
     });
 });
