@@ -18,6 +18,11 @@ const config: HardhatUserConfig = {
         auto: true,
         interval: 1000,
       },
+    },
+    reth: {
+      url: "http://localhost:8545",
+      gasPrice: 225000000000,
+      accounts: { mnemonic: "test test test test test test test test test test test junk" }
     }
   }
 };

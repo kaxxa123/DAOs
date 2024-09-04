@@ -31,8 +31,8 @@ REPORT_GAS=true npx hardhat test  ./test/end-to-end.ts
     const USDFactory = await ethers.getContractFactory("USDToken")
 
     // Pick the correct chain
-    const chain_node = "chain-31337"
-    const chain_type = chain_node
+    const network = await ethers.provider.getNetwork()
+    const chain_type = "chain-" + network.chainId.toString()
 
     fs = require("fs")
     util = require('util')
